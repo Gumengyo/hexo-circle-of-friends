@@ -115,5 +115,8 @@ jobs:
         commit_user_name: github-actions[bot]
         commit_user_email: github-actions@noreply.github.com
         
-    - name: keep alive
-      uses: gautamkrishnar/workflow-keepalive-action@v1.2
+    - name: Prevent timeout
+      uses: marocchino/keepalive-workflow@v1
+      with:
+        timeout-minutes: 2
+        same-step: true
