@@ -115,8 +115,8 @@ jobs:
         commit_user_name: github-actions[bot]
         commit_user_email: github-actions@noreply.github.com
         
-    - name: Prevent timeout
-      uses: marocchino/keepalive-workflow@v1
+    - name: Keep workflow alive
+      uses: gautamkrishnar/keepalive-workflow@v2
       with:
-        timeout-minutes: 2
-        same-step: true
+        use_api: true  # 默认使用 GitHub API，不生成空提交
+        time_elapsed: 45  # 45 天无活动时触发保活
