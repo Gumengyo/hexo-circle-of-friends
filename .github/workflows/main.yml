@@ -115,8 +115,5 @@ jobs:
         commit_user_name: github-actions[bot]
         commit_user_email: github-actions@noreply.github.com
         
-    - name: Keep workflow alive
-      uses: gautamkrishnar/keepalive-workflow@v2
-      with:
-        use_api: true  # 默认使用 GitHub API，不生成空提交
-        time_elapsed: 45  # 45 天无活动时触发保活
+    - name: Prevent timeout
+      run: while sleep 60; do :; done &
