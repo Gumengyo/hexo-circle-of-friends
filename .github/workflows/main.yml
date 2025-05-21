@@ -37,18 +37,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@main
+      uses: actions/checkout@v4  # 升级到稳定版本
 
     - name: Set up Python
-      uses: actions/setup-python@main
+      uses: actions/setup-python@v5  # 升级到最新稳定版
       with:
-        python-version: 3.11
+        python-version: "3.11"
         cache: "pip"
 
     - name: Install requirements
       working-directory: ./hexo_circle_of_friends
-      run: |
-        pip install -r requirements.txt
+      run: pip install -r requirements.txt
 
     - name: set env
       run: |
@@ -84,16 +83,15 @@ jobs:
       run: |
         python ./hexo_circle_of_friends/run.py
 
-    - name: Push sqlite data # sqlite push
+    - name: Push sqlite data
       if: ${{ env.STORAGE_TYPE == 'sqlite' }}
-      uses: github-actions-x/commit@v2.9
+      uses: stefanzweifel/git-auto-commit-action@v5  # 替换为更活跃的提交action
       with:
-        github-token: ${{ secrets.GITHUB_TOKEN }}
-        commit-message: "Update data.db"
-        files: data.db
-        rebase: 'true'
-        name: ${{ env.GITHUB_NAME }}
-        email: ${{ env.GITHUB_EMAIL }}
+        commit_message: "Update data.db"
+        file_pattern: data.db
+        commit_user_name: ${{ env.GITHUB_NAME }}
+        commit_user_email: ${{ env.GITHUB_EMAIL }}
+
 
     - name: mongodb Update posts # mongodb
       if: ${{ env.STORAGE_TYPE == 'mongodb' }}
@@ -108,16 +106,14 @@ jobs:
       run: |
         python ./hexo_circle_of_friends/utils/simple_mode_transform_json.py
 
-    - name: simple mode push # 推送极简模式
+    - name: simple mode push
       if: ${{ env.SIMPLE_MODE == 'true' }}
-      uses: github-actions-x/commit@v2.9
+      uses: stefanzweifel/git-auto-commit-action@v5  # 统一使用新提交组件
       with:
-        github-token: ${{ secrets.GITHUB_TOKEN }}
-        commit-message: "Update data.json"
-        files: data.json
-        rebase: 'true'
-        name: github-actions[bot]
-        email: github-actions@noreply.github.com
+        commit_message: "Update data.json"
+        file_pattern: data.json
+        commit_user_name: github-actions[bot]
+        commit_user_email: github-actions@noreply.github.com
 
     - name: keep alive
       uses: gautamkrishnar/keepalive-workflow@master
