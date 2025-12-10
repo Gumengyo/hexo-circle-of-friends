@@ -339,7 +339,8 @@ pub async fn start_get_friends_links_from_json(
 ) -> Result<SettingsFriendsLinksJsonMeta, Box<dyn std::error::Error>> {
     // 向json_api_or_path发起请求
     let res = client.get(json_api_or_path).send().await?;
-    let json_friends_links = serde_json::from_str(&res.text().await?)?;
+    let raw_value: serde_json::Value = serde_json::from_str(&res.text().await?)?;
+    let json_friends_links = tools::parse_json_friends_links_value(raw_value)?;
     Ok(json_friends_links)
 }
 

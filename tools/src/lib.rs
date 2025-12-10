@@ -1,6 +1,7 @@
 use chrono::{DateTime, Datelike, NaiveDate, NaiveDateTime, TimeZone};
 use data_structures::config;
 use logroller::{Compression, LogRollerBuilder, Rotation, RotationAge};
+use serde_json::Value as JsonValue;
 pub use serde_yaml::Value;
 use sha2::{Digest, Sha256};
 use std::fs::File;
@@ -244,14 +245,93 @@ pub fn get_env_var(var_name: &str) -> Result<String, Box<dyn std::error::Error>>
     }
 }
 
+fn json_friends_links_error(msg: &str) -> Box<dyn std::error::Error> {
+    Box::new(io::Error::other(msg.to_string()))
+}
+
+/// 将 json 中的友链数据转换为统一的结构，兼容 `data` 与 `friends` 两种字段，
+/// 并同时兼容数组形式与对象形式的友链配置
+pub fn parse_json_friends_links_value(
+    value: JsonValue,
+) -> Result<config::SettingsFriendsLinksJsonMeta, Box<dyn std::error::Error>> {
+    let friends_value = value
+        .get("data")
+        .or_else(|| value.get("friends"))
+        .ok_or_else(|| json_friends_links_error("json_api格式错误：没有data或friends字段"))?;
+
+    let friends_array = friends_value
+        .as_array()
+        .ok_or_else(|| json_friends_links_error("json_api格式错误：data或friends字段不是数组"))?;
+
+    if friends_array.is_empty() {
+        return Ok(config::SettingsFriendsLinksJsonMeta { friends: vec![] });
+    }
+
+    match &friends_array[0] {
+        JsonValue::Array(_) => {
+            let friends = friends_array
+                .iter()
+                .map(|item| {
+                    let arr = item
+                        .as_array()
+                        .ok_or_else(|| json_friends_links_error("json_api格式错误：普通格式友链应为数组"))?;
+                    let mut friend = Vec::with_capacity(arr.len());
+                    for v in arr {
+                        if let Some(s) = v.as_str() {
+                            friend.push(s.to_string());
+                        } else {
+                            return Err(json_friends_links_error(
+                                "json_api格式错误：友链字段必须是字符串",
+                            ));
+                        }
+                    }
+                    Ok(friend)
+                })
+                .collect::<Result<Vec<Vec<String>>, Box<dyn std::error::Error>>>()?;
+            Ok(config::SettingsFriendsLinksJsonMeta { friends })
+        }
+        JsonValue::Object(_) => {
+            let mut friends = vec![];
+            for item in friends_array {
+                let obj = item
+                    .as_object()
+                    .ok_or_else(|| json_friends_links_error("json_api进阶格式解析错误"))?;
+
+                let name = obj.get("name").and_then(|v| v.as_str());
+                let link = obj
+                    .get("url")
+                    .or_else(|| obj.get("link"))
+                    .and_then(|v| v.as_str());
+                let avatar = obj
+                    .get("image")
+                    .or_else(|| obj.get("avatar"))
+                    .and_then(|v| v.as_str());
+                if let (Some(name), Some(friendlink), Some(avatar)) = (name, link, avatar) {
+                    let mut friend = vec![
+                        name.to_string(),
+                        friendlink.to_string(),
+                        avatar.to_string(),
+                    ];
+                    if let Some(suffix) = obj.get("suffix").and_then(|v| v.as_str()) {
+                        friend.push(suffix.to_string());
+                    }
+                    friends.push(friend);
+                }
+            }
+            Ok(config::SettingsFriendsLinksJsonMeta { friends })
+        }
+        _ => Err(json_friends_links_error("json_api格式错误：无法判定数据形式")),
+    }
+}
+
 /// 解析JSON文件为SettingsFriendsLinksJsonMeta结构
 pub fn get_json_friends_links(
     path: &str,
 ) -> Result<config::SettingsFriendsLinksJsonMeta, Box<dyn std::error::Error>> {
     let file = File::open(path)?;
     let reader = BufReader::new(file);
-    let data: config::SettingsFriendsLinksJsonMeta = serde_json::from_reader(reader)?;
-    Ok(data)
+    let raw_value: JsonValue = serde_json::from_reader(reader)?;
+    parse_json_friends_links_value(raw_value)
 }
 
 /// 计算HTML内容的SHA256哈希值
@@ -610,6 +690,57 @@ mod tests {
     }
 
     #[test]
+    fn test_get_json_friends_links_with_data_array() {
+        use crate::config::SettingsFriendsLinksJsonMeta;
+        use std::fs;
+        use std::io::Write;
+
+        let temp_file = "temp_data_array.json";
+        let mut file = fs::File::create(temp_file).unwrap();
+        writeln!(
+            file,
+            r#"{{"data":[["name","https://example.com","https://avatar.com/avatar.png"]]}}"#
+        )
+        .unwrap();
+
+        let result: Result<SettingsFriendsLinksJsonMeta, _> = get_json_friends_links(temp_file);
+        assert!(result.is_ok());
+        let data = result.unwrap();
+        assert_eq!(data.friends.len(), 1);
+        assert_eq!(data.friends[0][0], "name");
+        assert_eq!(data.friends[0][1], "https://example.com");
+        assert_eq!(data.friends[0][2], "https://avatar.com/avatar.png");
+
+        fs::remove_file(temp_file).unwrap();
+    }
+
+    #[test]
+    fn test_get_json_friends_links_with_data_object() {
+        use crate::config::SettingsFriendsLinksJsonMeta;
+        use std::fs;
+        use std::io::Write;
+
+        let temp_file = "temp_data_object.json";
+        let mut file = fs::File::create(temp_file).unwrap();
+        writeln!(
+            file,
+            r#"{{"data":[{{"name":"name","url":"https://example.com","image":"https://avatar.com/a.png","suffix":"atom.xml"}}]}}"#
+        )
+        .unwrap();
+
+        let result: Result<SettingsFriendsLinksJsonMeta, _> = get_json_friends_links(temp_file);
+        assert!(result.is_ok());
+        let data = result.unwrap();
+        assert_eq!(data.friends.len(), 1);
+        assert_eq!(data.friends[0][0], "name");
+        assert_eq!(data.friends[0][1], "https://example.com");
+        assert_eq!(data.friends[0][2], "https://avatar.com/a.png");
+        assert_eq!(data.friends[0][3], "atom.xml");
+
+        fs::remove_file(temp_file).unwrap();
+    }
+
+    #[test]
     fn test_get_json_friends_links_structure() {
         use crate::config::SettingsFriendsLinksJsonMeta;
 
@@ -697,8 +828,9 @@ mod tests {
         let error = result.unwrap_err();
         let error_msg = error.to_string();
         assert!(
-            error_msg.contains("missing field")
+            error_msg.contains("data")
                 || error_msg.contains("friends")
+                || error_msg.contains("格式错误")
                 || error_msg.contains("expected")
         );
 
