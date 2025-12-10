@@ -23,7 +23,7 @@ LINK: [
 
 # 配置项友链
 # enable：# 是否启用配置项友链 true/false（针对还未适配主题或者有定制需求的用户）
-# json_api：通过json格式配置友链，详见：https://fcircle-doc.yyyzyyyz.cn/#/developmentdoc?id=配置项json友链
+# json_api_or_path：支持通过提供 json 格式的友链配置，可以是本地文件路径，或者是一个 url 地址。详见：https://fcircle-doc.yyyzyyyz.cn/docs/configuration.html
 # list字段填写格式：["name", "link", "avatar","suffix"]，其中：
 #       name：必填，友链的名字
 #       link：必填，友链主页地址
@@ -31,10 +31,18 @@ LINK: [
 #       suffix：选填，自定义订阅后缀，主要针对不规范的网站订阅后缀，见示例2
 SETTINGS_FRIENDS_LINKS: {
     enable: true,
-    json_api: "https://qexo.gumengyo.top/pub/friends/",
-    list: []
+    json_api_or_path: "https://qexo.gumengyo.top/pub/friends/",
+    list: [
+        # 示例1：
+        # ["贰猹の小窝", "https://noionion.top/", "https://pub-noionion.oss-cn-hangzhou.aliyuncs.com/head.jpg"],
+        # ["Akilarの糖果屋", "https://akilar.top/", "https://akilar.top/images/headimage.png"],
+        # 示例2：使用suffix的配置如下
+        # 程序目前自动获取 "atom.xml", "feed/atom", "rss.xml", "rss2.xml", "feed", "index.xml" 这些后缀
+        # 如果目标地址的后缀不在其中，就可以在这里添加
+        # 比如 https://elizen.me/hello.xml ，填写：
+        # ["elizen", "https://elizen.me/", "https://akilar.top/images/headimage.png", "hello.xml"]
+    ]
 }
-
 
 # block site list
 # 添加屏蔽站点，支持正则表达式
